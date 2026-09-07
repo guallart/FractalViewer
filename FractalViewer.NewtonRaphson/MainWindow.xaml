@@ -48,6 +48,13 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <Style x:Key="StepperButton" TargetType="Button" BasedOn="{StaticResource PanelButton}">
+            <Setter Property="Width" Value="26"/>
+            <Setter Property="Height" Value="24"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="FontSize" Value="14"/>
+        </Style>
     </Window.Resources>
 
     <Grid>
@@ -89,12 +96,45 @@
                 </DockPanel>
 
                 <StackPanel DockPanel.Dock="Bottom">
+
+                    <Border Background="#232329"
+                            BorderBrush="#2E2E36"
+                            BorderThickness="1"
+                            CornerRadius="5"
+                            Padding="12,10"
+                            Margin="0,16,0,14">
+                        <DockPanel>
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                <Button x:Name="iterationsDown"
+                                        Style="{StaticResource StepperButton}"
+                                        Content="−"
+                                        Click="IterationsDown_Click"/>
+                                <TextBlock x:Name="iterationsText"
+                                           Width="46"
+                                           TextAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           Foreground="#EDEDF0"
+                                           FontFamily="Consolas"
+                                           FontSize="14"/>
+                                <Button x:Name="iterationsUp"
+                                        Style="{StaticResource StepperButton}"
+                                        Content="+"
+                                        Click="IterationsUp_Click"/>
+                            </StackPanel>
+                            <TextBlock Text="Iterations"
+                                       Foreground="#A8A8B0"
+                                       FontSize="12"
+                                       VerticalAlignment="Center"/>
+                        </DockPanel>
+                    </Border>
+
                     <TextBlock x:Name="viewText"
                                Foreground="#8B8B93"
                                FontFamily="Consolas"
                                FontSize="11"
                                TextWrapping="Wrap"/>
-                    <TextBlock Text="Drag a marker to move a root, double-click the plane to add one there, right-click a marker to remove it. Drag elsewhere to pan, scroll to zoom. R resets the view, Ctrl+R the roots."
+
+                    <TextBlock Text="Drag a marker to move a root, double-click the plane to add one there, right-click a marker to remove it. Drag elsewhere to pan, scroll to zoom. Brackets step the iteration count, R resets the view, Ctrl+R the roots."
                                Foreground="#5E5E66"
                                FontSize="10"
                                TextWrapping="Wrap"

@@ -58,6 +58,7 @@ namespace FractalViewer.NewtonRaphson
 
       rootList.ItemsSource = _rootViews;
       BuildRootList();
+      UpdateIterationControls();
 
       surface.MouseWheel += OnMouseWheel;
       surface.MouseLeftButtonDown += OnMouseLeftButtonDown;
@@ -111,6 +112,41 @@ namespace FractalViewer.NewtonRaphson
       RedrawOverlay();
       _ = RequestRenderAsync();
     }
+
+    // ---------- iteration counter ----------
+
+    // Small steps where the picture changes fastest, coarser ones further up, so the
+    // whole range stays a few clicks away.
+    private static int StepFor(int value) => value < 20 ? 1
+                                           : value < 100 ? 5
+                                           : 25;
+
+    private void SetIterations(int value)
+    {
+      value = Math.Clamp(value, 0, FractalRenderer.IterationLimit);
+
+      if (value == _renderer.MaxIterations)
+        return;
+
+      _renderer.SetMaxIterations(value);
+      UpdateIterationControls();
+      _ = RequestRenderAsync();
+    }
+
+    private void UpdateIterationControls()
+    {
+      int value = _renderer.MaxIterations;
+
+      iterationsText.Text = value.ToString(CultureInfo.InvariantCulture);
+      iterationsDown.IsEnabled = value > 0;
+      iterationsUp.IsEnabled = value < FractalRenderer.IterationLimit;
+    }
+
+    private void IterationsUp_Click(object sender, RoutedEventArgs e) =>
+      SetIterations(_renderer.MaxIterations + StepFor(_renderer.MaxIterations));
+
+    private void IterationsDown_Click(object sender, RoutedEventArgs e) =>
+      SetIterations(_renderer.MaxIterations - StepFor(_renderer.MaxIterations - 1));
 
     // ---------- view transform ----------
 
@@ -231,6 +267,14 @@ namespace FractalViewer.NewtonRaphson
 
         case Key.Add or Key.OemPlus:
           AddRootAt(SuggestPosition());
+          break;
+
+        case Key.OemCloseBrackets:
+          SetIterations(_renderer.MaxIterations + StepFor(_renderer.MaxIterations));
+          break;
+
+        case Key.OemOpenBrackets:
+          SetIterations(_renderer.MaxIterations - StepFor(_renderer.MaxIterations - 1));
           break;
       }
     }

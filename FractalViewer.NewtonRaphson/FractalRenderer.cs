@@ -7,8 +7,22 @@ namespace FractalViewer.NewtonRaphson;
 
 public readonly record struct RootInfo(int Index, Complex Root, byte R, byte G, byte B);
 
+/// <summary>Everything the kernel needs about the view, bundled to keep the signature short.</summary>
+public readonly struct ViewParams(int width, int height, float scale, float centreRe, float centreIm, int maxIterations)
+{
+  public readonly int Width = width;
+  public readonly int Height = height;
+  public readonly float Scale = scale;
+  public readonly float CentreRe = centreRe;
+  public readonly float CentreIm = centreIm;
+  public readonly int MaxIterations = maxIterations;
+}
+
 public class FractalRenderer : IDisposable
 {
+  public const int DefaultMaxIterations = 100;
+  public const int IterationLimit = 1000;
+
   private int Width { get; }
   private int Height { get; }
 
@@ -26,6 +40,9 @@ public class FractalRenderer : IDisposable
   public float CentreRe { get; private set; }
   public float CentreIm { get; private set; }
 
+  /// <summary>Newton steps allowed per pixel before the nearest root is picked.</summary>
+  public int MaxIterations { get; private set; } = DefaultMaxIterations;
+
   public IReadOnlyList<RootInfo> Roots { get; private set; }
 
   private Accelerator Accelerator { get; }
@@ -33,7 +50,7 @@ public class FractalRenderer : IDisposable
   private MemoryBuffer1D<byte, Stride1D.Dense> RgbaBuffer { get; }
   private MemoryBuffer1D<byte, Stride1D.Dense> PaletteBuffer { get; }
   private byte[] Rgba { get; }
-  private Action<Index1D, ArrayView<byte>, ArrayView<byte>, Poly, int, int, float, float, float> Kernel { get; }
+  private Action<Index1D, ArrayView<byte>, ArrayView<byte>, Poly, ViewParams> Kernel { get; }
 
   private static readonly byte[] Palette = [
      31, 119, 180,
@@ -78,7 +95,7 @@ public class FractalRenderer : IDisposable
     PaletteBuffer = Accelerator.Allocate1D<byte>(_colours.Length);
 
     Kernel = Accelerator.LoadAutoGroupedStreamKernel
-      <Index1D, ArrayView<byte>, ArrayView<byte>, Poly, int, int, float, float, float>(ComputeKernel);
+      <Index1D, ArrayView<byte>, ArrayView<byte>, Poly, ViewParams>(ComputeKernel);
   }
 
   // ---------- roots ----------
@@ -149,6 +166,8 @@ public class FractalRenderer : IDisposable
     }
   }
 
+  // ---------- view ----------
+
   public void SetView(float centreRe, float centreIm, float scale)
   {
     lock (_sync)
@@ -157,6 +176,13 @@ public class FractalRenderer : IDisposable
       CentreIm = centreIm;
       Scale = scale;
     }
+  }
+
+  /// <summary>Sets the iteration budget, clamped to 0..<see cref="IterationLimit"/>.</summary>
+  public void SetMaxIterations(int value)
+  {
+    lock (_sync)
+      MaxIterations = Math.Clamp(value, 0, IterationLimit);
   }
 
   private int FreeSlot()
@@ -196,7 +222,7 @@ public class FractalRenderer : IDisposable
   public byte[] Render()
   {
     Poly poly;
-    float scale, centreRe, centreIm;
+    ViewParams view;
     byte[]? colours = null;
 
     // Snapshot under the lock: the UI thread can edit roots mid-render, and Poly is a
@@ -204,9 +230,7 @@ public class FractalRenderer : IDisposable
     lock (_sync)
     {
       poly = _poly;
-      scale = Scale;
-      centreRe = CentreRe;
-      centreIm = CentreIm;
+      view = new ViewParams(Width, Height, Scale, CentreRe, CentreIm, MaxIterations);
 
       if (_coloursDirty)
       {
@@ -219,21 +243,20 @@ public class FractalRenderer : IDisposable
     if (colours is not null)
       PaletteBuffer.CopyFromCPU(colours);
 
-    Kernel(PixelCount, RgbaBuffer.View, PaletteBuffer.View, poly, Width, Height, scale, centreRe, centreIm);
+    Kernel(PixelCount, RgbaBuffer.View, PaletteBuffer.View, poly, view);
     RgbaBuffer.CopyToCPU(Rgba);
     return Rgba;
   }
 
-  private static void ComputeKernel(Index1D i, ArrayView<byte> buffer, ArrayView<byte> palette, Poly poly,
-                                    int width, int height, float scale, float centreRe, float centreIm)
+  private static void ComputeKernel(Index1D i, ArrayView<byte> buffer, ArrayView<byte> palette, Poly poly, ViewParams view)
   {
-    int xi = i % width;
-    int yi = i / width;
+    int xi = i % view.Width;
+    int yi = i / view.Width;
 
-    float x = centreRe + (xi - width * 0.5f) * scale;
-    float y = centreIm + (yi - height * 0.5f) * scale;
+    float x = view.CentreRe + (xi - view.Width * 0.5f) * view.Scale;
+    float y = view.CentreIm + (yi - view.Height * 0.5f) * view.Scale;
 
-    int root = poly.FindRoot(new Complex(x, y));
+    int root = poly.FindRoot(new Complex(x, y), view.MaxIterations);
 
     byte r = 0, g = 0, b = 0;
     if (root >= 0)

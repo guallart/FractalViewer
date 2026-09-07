@@ -9,7 +9,6 @@ namespace FractalViewer.NewtonRaphson;
 public struct Poly
 {
   public const int MaxDegree = 8;
-  private const int MaxIters = 100;
   private const float ToleranceSquared = 1e-6f;
 
   private readonly int Degree;
@@ -111,9 +110,14 @@ public struct Poly
     return value / deriv;
   }
 
-  public readonly int FindRoot(Complex z)
+  /// <summary>
+  /// Iterates Newton–Raphson from <paramref name="z"/> for at most
+  /// <paramref name="maxIters"/> steps, then returns the index of the root nearest to
+  /// wherever the iteration stopped. Zero iterations classifies the starting point itself.
+  /// </summary>
+  public readonly int FindRoot(Complex z, int maxIters)
   {
-    for (int i = 0; i < MaxIters; i++)
+    for (int i = 0; i < maxIters; i++)
     {
       Complex step = NewtonStep(z);
       z -= step;
