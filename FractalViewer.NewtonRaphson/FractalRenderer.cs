@@ -63,7 +63,7 @@ public class FractalRenderer : IDisposable
     int yi = i / width;
 
     float x = (xi - width * 0.5f) * scale;
-    float y = (yi - height * 0.5f) * scale;
+    float y = (height * 0.5f - yi) * scale;
 
     int root = poly.FindRoot(new Complex(x, y));
 

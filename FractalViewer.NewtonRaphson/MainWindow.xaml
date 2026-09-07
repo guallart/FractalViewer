@@ -5,8 +5,15 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:FractalViewer.NewtonRaphson"
         mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
+        Title="Newton Fractal"
+        Width="800"
+        Height="600"
+        ResizeMode="NoResize"
+        SizeToContent="Manual"
+        WindowStartupLocation="CenterScreen">
     <Grid>
-        <Image x:Name="fractal" Stretch="Uniform"/>
+        <Image x:Name="fractal" Stretch="None" SnapsToDevicePixels="True"/>
+        <Canvas x:Name="overlay" Width="800" Height="600"
+            IsHitTestVisible="False" UseLayoutRounding="True"/>
     </Grid>
 </Window>
