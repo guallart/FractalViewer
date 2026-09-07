@@ -22,6 +22,8 @@ public class FractalRenderer : IDisposable
 {
   public const int DefaultMaxIterations = 100;
   public const int IterationLimit = 1000;
+  private const float ShadeFalloff = 10f; // iterations at which brightness is roughly halved
+  private const float MinShade = 0.3f; // floor, so slow regions stay tinted rather than black
 
   private int Width { get; }
   private int Height { get; }
@@ -256,15 +258,24 @@ public class FractalRenderer : IDisposable
     float x = view.CentreRe + (xi - view.Width * 0.5f) * view.Scale;
     float y = view.CentreIm + (yi - view.Height * 0.5f) * view.Scale;
 
-    int root = poly.FindRoot(new Complex(x, y), view.MaxIterations);
+    int result = poly.FindRoot(new Complex(x, y), view.MaxIterations);
 
     byte r = 0, g = 0, b = 0;
-    if (root >= 0)
+
+    if (result >= 0)
     {
+      int root = result & 0xFF;
+      int iters = result >> 8;
+
+      // Pixels that took a long time are the ones near a basin boundary. Darkening by
+      // iteration count turns the flat regions into contour bands.
+      float t = iters / (iters + ShadeFalloff); // 0 at a root, approaching 1 in slow regions
+      float shade = 1f - (1f - MinShade) * t;
+
       int p = root * 3;
-      r = palette[p + 0];
-      g = palette[p + 1];
-      b = palette[p + 2];
+      r = (byte)(palette[p + 0] * shade);
+      g = (byte)(palette[p + 1] * shade);
+      b = (byte)(palette[p + 2] * shade);
     }
 
     int o = i * 4;

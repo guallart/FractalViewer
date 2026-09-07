@@ -117,13 +117,18 @@ public struct Poly
   /// </summary>
   public readonly int FindRoot(Complex z, int maxIters)
   {
+    int used = maxIters;          // never converged: the full budget
+
     for (int i = 0; i < maxIters; i++)
     {
       Complex step = NewtonStep(z);
       z -= step;
 
       if (step.MagnitudeSquared() < ToleranceSquared)
+      {
+        used = i + 1;
         break;
+      }
     }
 
     int bestIndex = -1;
@@ -140,6 +145,6 @@ public struct Poly
       }
     }
 
-    return bestIndex;
+    return bestIndex < 0 ? -1 : bestIndex | (used << 8);
   }
 }
