@@ -1,3 +1,5 @@
 <Solution>
-  <Project Path="FractalViewer/FractalViewer.csproj" />
+  <Project Path="FractalViewer.Core/FractalViewer.Core.csproj" />
+  <Project Path="FractalViewer.NewtonRaphson/FractalViewer.NewtonRaphson.csproj" Id="b1b17016-befc-48b8-9d11-88846b08150f" />
+  <Project Path="FractalViewer.Test/FractalViewer.Test.csproj" />
 </Solution>
