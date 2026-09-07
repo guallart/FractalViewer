@@ -52,11 +52,11 @@
                                FontFamily="Consolas"
                                FontSize="11"
                                TextWrapping="Wrap"/>
-                    <TextBlock Text="Drag to pan, scroll to zoom, R to reset"
+                    <TextBlock Text="Drag a marker to move that root. Drag elsewhere to pan, scroll to zoom. R resets the view, Ctrl+R the roots."
                                Foreground="#5E5E66"
                                FontSize="10"
                                TextWrapping="Wrap"
-                               Margin="0,8,0,0"/>
+                               Margin="0,10,0,0"/>
                 </StackPanel>
 
                 <ItemsControl x:Name="rootList" VerticalAlignment="Top">

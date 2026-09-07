@@ -11,16 +11,19 @@ public class FractalRenderer : IDisposable
 {
   private int Width { get; }
   private int Height { get; }
-  private Poly Poly { get; set; }
+
+  private readonly Lock _sync = new();
+  private readonly Complex[] _roots;
+  private Poly _poly;
 
   /// <summary>Complex units per pixel. Smaller means deeper zoom.</summary>
-  public float Scale { get; set; }
+  public float Scale { get; private set; }
 
   /// <summary>Complex value at the centre pixel of the view.</summary>
-  public float CentreRe { get; set; }
-  public float CentreIm { get; set; }
+  public float CentreRe { get; private set; }
+  public float CentreIm { get; private set; }
 
-  public IReadOnlyList<RootInfo> Roots { get; }
+  public IReadOnlyList<RootInfo> Roots { get; private set; }
 
   private Accelerator Accelerator { get; }
   private Context Context { get; }
@@ -58,9 +61,9 @@ public class FractalRenderer : IDisposable
     Context = Context.CreateDefault();
     Accelerator = Context.GetPreferredDevice(preferCPU: false).CreateAccelerator(Context);
 
-    Poly = new Poly(roots);
-
-    Roots = [.. roots.Select((r, i) => new RootInfo(i, r, Palette[i * 3], Palette[i * 3 + 1], Palette[i * 3 + 2]))];
+    _roots = [.. roots];
+    _poly = new Poly(_roots);
+    Roots = BuildRootInfo(_roots);
 
     Rgba = new byte[PixelCount * 4];
     RgbaBuffer = Accelerator.Allocate1D<byte>(PixelCount * 4);
@@ -70,9 +73,70 @@ public class FractalRenderer : IDisposable
       <Index1D, ArrayView<byte>, ArrayView<byte>, Poly, int, int, float, float, float>(ComputeKernel);
   }
 
+  /// <summary>Moves a single root and rebuilds the polynomial around it.</summary>
+  public void SetRoot(int index, Complex value)
+  {
+    ArgumentOutOfRangeException.ThrowIfNegative(index);
+    ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(index, _roots.Length);
+
+    lock (_sync)
+    {
+      _roots[index] = value;
+      _poly = new Poly(_roots);
+      Roots = BuildRootInfo(_roots);
+    }
+  }
+
+  /// <summary>Replaces the whole root set. Degree may change; colours follow the palette order.</summary>
+  public void SetRoots(Complex[] roots)
+  {
+    ArgumentNullException.ThrowIfNull(roots);
+
+    if (roots.Length is 0 or > 8 || roots.Length > PaletteSize)
+      throw new ArgumentException($"Need 1 to {Math.Min(8, PaletteSize)} roots.", nameof(roots));
+
+    lock (_sync)
+    {
+      Poly poly = new(roots);          // validates before anything is committed
+      Complex[] copy = [.. roots];
+
+      _poly = poly;
+      Roots = BuildRootInfo(copy);
+
+      if (copy.Length == _roots.Length)
+        copy.CopyTo(_roots, 0);
+    }
+  }
+
+  public void SetView(float centreRe, float centreIm, float scale)
+  {
+    lock (_sync)
+    {
+      CentreRe = centreRe;
+      CentreIm = centreIm;
+      Scale = scale;
+    }
+  }
+
+  private static RootInfo[] BuildRootInfo(Complex[] roots) =>
+    [.. roots.Select((r, i) => new RootInfo(i, r, Palette[i * 3], Palette[i * 3 + 1], Palette[i * 3 + 2]))];
+
   public byte[] Render()
   {
-    Kernel(PixelCount, RgbaBuffer.View, PaletteBuffer.View, Poly, Width, Height, Scale, CentreRe, CentreIm);
+    Poly poly;
+    float scale, centreRe, centreIm;
+
+    // Snapshot under the lock: the UI thread can move a root mid-render, and Poly is
+    // a large struct that would otherwise be copied while it is being rewritten.
+    lock (_sync)
+    {
+      poly = _poly;
+      scale = Scale;
+      centreRe = CentreRe;
+      centreIm = CentreIm;
+    }
+
+    Kernel(PixelCount, RgbaBuffer.View, PaletteBuffer.View, poly, Width, Height, scale, centreRe, centreIm);
     RgbaBuffer.CopyToCPU(Rgba);
     return Rgba;
   }

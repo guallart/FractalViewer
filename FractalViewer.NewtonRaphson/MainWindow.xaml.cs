@@ -1,5 +1,6 @@
 ﻿using FractalViewer.Core;
 
+using System.ComponentModel;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
@@ -20,16 +21,23 @@ namespace FractalViewer.NewtonRaphson
     private const float MaxScale = 1f;
     private const double ZoomPerNotch = 1.15;
 
-    private static readonly Complex[] Roots = [Complex.One, Complex.OneI, -Complex.OneI];
+    private const double MarkerRadius = 6.0;
+    private const double GrabRadius = MarkerRadius + 5.0;
+
+    private static readonly Complex[] InitialRoots = [Complex.One, Complex.OneI, -Complex.OneI];
 
     private readonly FractalRenderer _renderer;
     private readonly WriteableBitmap _bitmap;
+    private readonly List<RootView> _rootViews = [];
 
     private bool _rendering;
     private bool _renderPending;
 
-    private bool _dragging;
-    private Point _dragLast;
+    private bool _panning;
+    private Point _panLast;
+
+    private int _dragRoot = -1;
+    private int _hoverRoot = -1;
 
     public MainWindow()
     {
@@ -37,7 +45,7 @@ namespace FractalViewer.NewtonRaphson
 
       try
       {
-        _renderer = new FractalRenderer(W, H, DefaultScale, Roots);
+        _renderer = new FractalRenderer(W, H, DefaultScale, InitialRoots);
       }
       catch (Exception ex)
       {
@@ -54,6 +62,7 @@ namespace FractalViewer.NewtonRaphson
       surface.MouseLeftButtonDown += OnMouseLeftButtonDown;
       surface.MouseMove += OnMouseMove;
       surface.MouseLeftButtonUp += OnMouseLeftButtonUp;
+      surface.MouseLeave += (_, _) => SetHover(-1);
       KeyDown += OnKeyDown;
 
       Loaded += async (_, _) =>
@@ -65,8 +74,8 @@ namespace FractalViewer.NewtonRaphson
       Closed += (_, _) => _renderer.Dispose();
     }
 
-    // Pan and zoom fire far faster than a full frame takes. Only one render runs at
-    // a time; anything requested meanwhile collapses into a single follow-up pass.
+    // Dragging fires far faster than a full frame takes. Only one render runs at a
+    // time; anything requested meanwhile collapses into a single follow-up pass.
     private async Task RequestRenderAsync()
     {
       if (_rendering)
@@ -103,10 +112,7 @@ namespace FractalViewer.NewtonRaphson
 
     private void SetView(double centreRe, double centreIm, double scale)
     {
-      _renderer.Scale = (float)Math.Clamp(scale, MinScale, MaxScale);
-      _renderer.CentreRe = (float)centreRe;
-      _renderer.CentreIm = (float)centreIm;
-
+      _renderer.SetView((float)centreRe, (float)centreIm, (float)Math.Clamp(scale, MinScale, MaxScale));
       RedrawOverlay();
       _ = RequestRenderAsync();
     }
@@ -129,37 +135,111 @@ namespace FractalViewer.NewtonRaphson
 
     private void OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-      _dragging = true;
-      _dragLast = e.GetPosition(surface);
+      Point p = e.GetPosition(surface);
+      _dragRoot = HitTestRoot(p);
+
+      if (_dragRoot < 0)
+      {
+        _panning = true;
+        _panLast = p;
+      }
+
       surface.CaptureMouse();
-      surface.Cursor = Cursors.ScrollAll;
+      surface.Cursor = _dragRoot >= 0 ? Cursors.SizeAll : Cursors.ScrollAll;
     }
 
     private void OnMouseMove(object sender, MouseEventArgs e)
     {
-      if (!_dragging)
-        return;
-
       Point p = e.GetPosition(surface);
-      Vector d = p - _dragLast;
-      _dragLast = p;
 
-      SetView(_renderer.CentreRe - d.X * Scale,
-              _renderer.CentreIm - d.Y * Scale,
-              Scale);
+      if (_dragRoot >= 0)
+      {
+        MoveRoot(_dragRoot, p);
+        return;
+      }
+
+      if (_panning)
+      {
+        Vector d = p - _panLast;
+        _panLast = p;
+
+        SetView(_renderer.CentreRe - d.X * Scale,
+                _renderer.CentreIm - d.Y * Scale,
+                Scale);
+        return;
+      }
+
+      SetHover(HitTestRoot(p));
     }
 
     private void OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
-      _dragging = false;
+      _dragRoot = -1;
+      _panning = false;
       surface.ReleaseMouseCapture();
       surface.Cursor = Cursors.Arrow;
+
+      SetHover(HitTestRoot(e.GetPosition(surface)));
     }
 
     private void OnKeyDown(object sender, KeyEventArgs e)
     {
-      if (e.Key == Key.R)
-        SetView(0, 0, DefaultScale);
+      switch (e.Key)
+      {
+        case Key.R when Keyboard.Modifiers == ModifierKeys.Control:
+          _renderer.SetRoots(InitialRoots);
+          RefreshRootValues();
+          RedrawOverlay();
+          _ = RequestRenderAsync();
+          break;
+
+        case Key.R:
+          SetView(0, 0, DefaultScale);
+          break;
+      }
+    }
+
+    private int HitTestRoot(Point p)
+    {
+      int best = -1;
+      double bestDistance = GrabRadius * GrabRadius;
+
+      foreach (RootInfo r in _renderer.Roots)
+      {
+        double dx = p.X - ReToX(r.Root.Real);
+        double dy = p.Y - ImToY(r.Root.Imaginary);
+        double distance = dx * dx + dy * dy;
+
+        if (distance <= bestDistance)
+        {
+          bestDistance = distance;
+          best = r.Index;
+        }
+      }
+
+      return best;
+    }
+
+    private void MoveRoot(int index, Point p)
+    {
+      _renderer.SetRoot(index, new Complex((float)XToRe(p.X), (float)YToIm(p.Y)));
+
+      RefreshRootValues();
+      RedrawOverlay();
+      _ = RequestRenderAsync();
+    }
+
+    private void SetHover(int index)
+    {
+      if (index == _hoverRoot)
+        return;
+
+      _hoverRoot = index;
+
+      if (!_panning && _dragRoot < 0)
+        surface.Cursor = index >= 0 ? Cursors.SizeAll : Cursors.Arrow;
+
+      RedrawOverlay();
     }
 
     private void RedrawOverlay()
@@ -224,8 +304,6 @@ namespace FractalViewer.NewtonRaphson
       return nice * magnitude;
     }
 
-    private const double MarkerRadius = 6.0;
-
     private void DrawRootMarkers()
     {
       Brush halo = MakeBrush(Color.FromArgb(210, 18, 18, 22));
@@ -240,22 +318,42 @@ namespace FractalViewer.NewtonRaphson
         if (cx < -50 || cx > W + 50 || cy < -50 || cy > H + 50)
           continue;
 
+        bool active = r.Index == _dragRoot || r.Index == _hoverRoot;
+        double radius = active ? MarkerRadius + 2 : MarkerRadius;
+
         // Dark halo underneath so the marker reads against its own basin colour.
-        overlay.Children.Add(NewCircle(cx, cy, MarkerRadius + 1.5, null, halo, 3.0));
-        overlay.Children.Add(NewCircle(cx, cy, MarkerRadius, MakeBrush(Color.FromRgb(r.R, r.G, r.B)), ring, 2.0));
+        overlay.Children.Add(NewCircle(cx, cy, radius + 1.5, null, halo, 3.0));
+        overlay.Children.Add(NewCircle(cx, cy, radius, MakeBrush(Color.FromRgb(r.R, r.G, r.B)), ring, active ? 3.0 : 2.0));
       }
     }
 
     private void BuildRootList()
     {
-      rootList.ItemsSource = _renderer.Roots
-        .Select(r => new RootView
+      _rootViews.Clear();
+
+      foreach (RootInfo r in _renderer.Roots)
+      {
+        _rootViews.Add(new RootView
         {
           Value = FormatComplex(r.Root.Real, r.Root.Imaginary),
           Label = $"root {r.Index}",
           Swatch = MakeBrush(Color.FromRgb(r.R, r.G, r.B)),
-        })
-        .ToList();
+        });
+      }
+
+      rootList.ItemsSource = _rootViews;
+    }
+
+    private void RefreshRootValues()
+    {
+      if (_renderer.Roots.Count != _rootViews.Count)
+      {
+        BuildRootList();
+        return;
+      }
+
+      foreach (RootInfo r in _renderer.Roots)
+        _rootViews[r.Index].Value = FormatComplex(r.Root.Real, r.Root.Imaginary);
     }
 
     private static string FormatComplex(double re, double im)
@@ -266,11 +364,27 @@ namespace FractalViewer.NewtonRaphson
       static string Fmt(double v) => v.ToString("0.####", CultureInfo.InvariantCulture);
     }
 
-    private sealed class RootView
+    private sealed class RootView : INotifyPropertyChanged
     {
-      public required string Value { get; init; }
+      private string _value = "";
+
+      public required string Value
+      {
+        get => _value;
+        set
+        {
+          if (_value == value)
+            return;
+
+          _value = value;
+          PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Value)));
+        }
+      }
+
       public required string Label { get; init; }
       public required Brush Swatch { get; init; }
+
+      public event PropertyChangedEventHandler? PropertyChanged;
     }
 
     private static SolidColorBrush MakeBrush(Color color)
