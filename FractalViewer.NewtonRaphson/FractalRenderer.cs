@@ -11,8 +11,14 @@ public class FractalRenderer : IDisposable
 {
   private int Width { get; }
   private int Height { get; }
-  private float Scale { get; }
   private Poly Poly { get; set; }
+
+  /// <summary>Complex units per pixel. Smaller means deeper zoom.</summary>
+  public float Scale { get; set; }
+
+  /// <summary>Complex value at the centre pixel of the view.</summary>
+  public float CentreRe { get; set; }
+  public float CentreIm { get; set; }
 
   public IReadOnlyList<RootInfo> Roots { get; }
 
@@ -21,7 +27,7 @@ public class FractalRenderer : IDisposable
   private MemoryBuffer1D<byte, Stride1D.Dense> RgbaBuffer { get; }
   private MemoryBuffer1D<byte, Stride1D.Dense> PaletteBuffer { get; }
   private byte[] Rgba { get; }
-  private Action<Index1D, ArrayView<byte>, ArrayView<byte>, Poly, int, int, float> Kernel { get; }
+  private Action<Index1D, ArrayView<byte>, ArrayView<byte>, Poly, int, int, float, float, float> Kernel { get; }
 
   private static readonly byte[] Palette = [
      31, 119, 180,
@@ -61,23 +67,24 @@ public class FractalRenderer : IDisposable
     PaletteBuffer = Accelerator.Allocate1D(Palette);
 
     Kernel = Accelerator.LoadAutoGroupedStreamKernel
-      <Index1D, ArrayView<byte>, ArrayView<byte>, Poly, int, int, float>(ComputeKernel);
+      <Index1D, ArrayView<byte>, ArrayView<byte>, Poly, int, int, float, float, float>(ComputeKernel);
   }
 
   public byte[] Render()
   {
-    Kernel(PixelCount, RgbaBuffer.View, PaletteBuffer.View, Poly, Width, Height, Scale);
+    Kernel(PixelCount, RgbaBuffer.View, PaletteBuffer.View, Poly, Width, Height, Scale, CentreRe, CentreIm);
     RgbaBuffer.CopyToCPU(Rgba);
     return Rgba;
   }
 
-  private static void ComputeKernel(Index1D i, ArrayView<byte> buffer, ArrayView<byte> palette, Poly poly, int width, int height, float scale)
+  private static void ComputeKernel(Index1D i, ArrayView<byte> buffer, ArrayView<byte> palette, Poly poly,
+                                    int width, int height, float scale, float centreRe, float centreIm)
   {
     int xi = i % width;
     int yi = i / width;
 
-    float x = (xi - width * 0.5f) * scale;
-    float y = (yi - height * 0.5f) * scale;
+    float x = centreRe + (xi - width * 0.5f) * scale;
+    float y = centreIm + (yi - height * 0.5f) * scale;
 
     int root = poly.FindRoot(new Complex(x, y));
 

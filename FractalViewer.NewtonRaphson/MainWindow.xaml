@@ -20,8 +20,14 @@
             <ColumnDefinition Width="264"/>
         </Grid.ColumnDefinitions>
 
-        <!-- Fractal surface: fixed at the bitmap's native pixel size -->
-        <Grid Grid.Column="0" Width="1000" Height="750">
+        <!-- Fractal surface: fixed at the bitmap's native pixel size.
+             Background is required so the grid receives mouse input. -->
+        <Grid x:Name="surface"
+              Grid.Column="0"
+              Width="1000" Height="750"
+              Background="Transparent"
+              ClipToBounds="True"
+              Focusable="True">
             <Image x:Name="fractal" Stretch="None"/>
             <Canvas x:Name="overlay" Width="1000" Height="750" IsHitTestVisible="False"/>
         </Grid>
@@ -37,7 +43,21 @@
                            Text="Roots"
                            Foreground="#F2F2F4"
                            FontSize="16"
-                           FontWeight="SemiBold"/>
+                           FontWeight="SemiBold"
+                           Margin="0,0,0,16"/>
+
+                <StackPanel DockPanel.Dock="Bottom">
+                    <TextBlock x:Name="viewText"
+                               Foreground="#8B8B93"
+                               FontFamily="Consolas"
+                               FontSize="11"
+                               TextWrapping="Wrap"/>
+                    <TextBlock Text="Drag to pan, scroll to zoom, R to reset"
+                               Foreground="#5E5E66"
+                               FontSize="10"
+                               TextWrapping="Wrap"
+                               Margin="0,8,0,0"/>
+                </StackPanel>
 
                 <ItemsControl x:Name="rootList" VerticalAlignment="Top">
                     <ItemsControl.ItemTemplate>
