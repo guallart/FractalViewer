@@ -56,12 +56,14 @@ namespace FractalViewer.NewtonRaphson
       _bitmap = new WriteableBitmap(W, H, 96, 96, PixelFormats.Bgra32, null);
       fractal.Source = _bitmap;
 
+      rootList.ItemsSource = _rootViews;
       BuildRootList();
 
       surface.MouseWheel += OnMouseWheel;
       surface.MouseLeftButtonDown += OnMouseLeftButtonDown;
       surface.MouseMove += OnMouseMove;
       surface.MouseLeftButtonUp += OnMouseLeftButtonUp;
+      surface.MouseRightButtonDown += OnMouseRightButtonDown;
       surface.MouseLeave += (_, _) => SetHover(-1);
       KeyDown += OnKeyDown;
 
@@ -73,6 +75,8 @@ namespace FractalViewer.NewtonRaphson
 
       Closed += (_, _) => _renderer.Dispose();
     }
+
+    // ---------- render scheduling ----------
 
     // Dragging fires far faster than a full frame takes. Only one render runs at a
     // time; anything requested meanwhile collapses into a single follow-up pass.
@@ -102,6 +106,14 @@ namespace FractalViewer.NewtonRaphson
       }
     }
 
+    private void Invalidate()
+    {
+      RedrawOverlay();
+      _ = RequestRenderAsync();
+    }
+
+    // ---------- view transform ----------
+
     private double Scale => _renderer.Scale;
 
     private double ReToX(double re) => (re - _renderer.CentreRe) / Scale + W * 0.5;
@@ -113,9 +125,10 @@ namespace FractalViewer.NewtonRaphson
     private void SetView(double centreRe, double centreIm, double scale)
     {
       _renderer.SetView((float)centreRe, (float)centreIm, (float)Math.Clamp(scale, MinScale, MaxScale));
-      RedrawOverlay();
-      _ = RequestRenderAsync();
+      Invalidate();
     }
+
+    // ---------- input ----------
 
     private void OnMouseWheel(object sender, MouseWheelEventArgs e)
     {
@@ -136,7 +149,17 @@ namespace FractalViewer.NewtonRaphson
     private void OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
       Point p = e.GetPosition(surface);
-      _dragRoot = HitTestRoot(p);
+      int hit = HitTestRoot(p);
+
+      if (e.ClickCount == 2)
+      {
+        if (hit < 0)
+          AddRootAt(PointToComplex(p));
+
+        return;
+      }
+
+      _dragRoot = hit;
 
       if (_dragRoot < 0)
       {
@@ -154,7 +177,9 @@ namespace FractalViewer.NewtonRaphson
 
       if (_dragRoot >= 0)
       {
-        MoveRoot(_dragRoot, p);
+        _renderer.SetRoot(_dragRoot, PointToComplex(p));
+        RefreshRootValues();
+        Invalidate();
         return;
       }
 
@@ -182,22 +207,101 @@ namespace FractalViewer.NewtonRaphson
       SetHover(HitTestRoot(e.GetPosition(surface)));
     }
 
+    private void OnMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+    {
+      int hit = HitTestRoot(e.GetPosition(surface));
+
+      if (hit >= 0)
+        RemoveRootAt(hit);
+    }
+
     private void OnKeyDown(object sender, KeyEventArgs e)
     {
       switch (e.Key)
       {
         case Key.R when Keyboard.Modifiers == ModifierKeys.Control:
           _renderer.SetRoots(InitialRoots);
-          RefreshRootValues();
-          RedrawOverlay();
-          _ = RequestRenderAsync();
+          BuildRootList();
+          Invalidate();
           break;
 
         case Key.R:
           SetView(0, 0, DefaultScale);
           break;
+
+        case Key.Add or Key.OemPlus:
+          AddRootAt(SuggestPosition());
+          break;
       }
     }
+
+    // ---------- editing roots ----------
+
+    private Complex PointToComplex(Point p) => new((float)XToRe(p.X), (float)YToIm(p.Y));
+
+    private void AddRootAt(Complex value)
+    {
+      if (_renderer.Roots.Count >= FractalRenderer.MaxRoots)
+        return;
+
+      _renderer.AddRoot(value);
+      BuildRootList();
+      Invalidate();
+    }
+
+    private void RemoveRootAt(int index)
+    {
+      if (_renderer.Roots.Count <= 1)
+        return;
+
+      _renderer.RemoveRoot(index);
+
+      _hoverRoot = -1;
+      _dragRoot = -1;
+
+      BuildRootList();
+      Invalidate();
+    }
+
+    private void AddRoot_Click(object sender, RoutedEventArgs e) => AddRootAt(SuggestPosition());
+
+    private void RemoveRoot_Click(object sender, RoutedEventArgs e)
+    {
+      if (sender is FrameworkElement { Tag: RootView view })
+      {
+        int index = _rootViews.IndexOf(view);
+
+        if (index >= 0)
+          RemoveRootAt(index);
+      }
+    }
+
+    // Places a new root inside the current view, stepping round by the golden angle so
+    // successive additions spread out instead of stacking on the same spot.
+    private Complex SuggestPosition()
+    {
+      const double GoldenAngle = 2.39996;
+
+      double radius = W * Scale * 0.25;
+      double minSeparation = 3 * GrabRadius * Scale;
+
+      for (int i = 0; i < 12; i++)
+      {
+        double angle = GoldenAngle * (_renderer.Roots.Count + i);
+        double re = _renderer.CentreRe + radius * Math.Cos(angle);
+        double im = _renderer.CentreIm + radius * Math.Sin(angle);
+
+        if (_renderer.Roots.All(r => Distance(r.Root, re, im) >= minSeparation))
+          return new Complex((float)re, (float)im);
+      }
+
+      return new Complex((float)(_renderer.CentreRe + radius), _renderer.CentreIm);
+
+      static double Distance(Complex root, double re, double im) =>
+        Math.Sqrt(Math.Pow(root.Real - re, 2) + Math.Pow(root.Imaginary - im, 2));
+    }
+
+    // ---------- hit testing ----------
 
     private int HitTestRoot(Point p)
     {
@@ -220,15 +324,6 @@ namespace FractalViewer.NewtonRaphson
       return best;
     }
 
-    private void MoveRoot(int index, Point p)
-    {
-      _renderer.SetRoot(index, new Complex((float)XToRe(p.X), (float)YToIm(p.Y)));
-
-      RefreshRootValues();
-      RedrawOverlay();
-      _ = RequestRenderAsync();
-    }
-
     private void SetHover(int index)
     {
       if (index == _hoverRoot)
@@ -241,6 +336,8 @@ namespace FractalViewer.NewtonRaphson
 
       RedrawOverlay();
     }
+
+    // ---------- overlay ----------
 
     private void RedrawOverlay()
     {
@@ -327,9 +424,13 @@ namespace FractalViewer.NewtonRaphson
       }
     }
 
+    // ---------- roots panel ----------
+
     private void BuildRootList()
     {
       _rootViews.Clear();
+
+      bool canRemove = _renderer.Roots.Count > 1;
 
       foreach (RootInfo r in _renderer.Roots)
       {
@@ -338,10 +439,12 @@ namespace FractalViewer.NewtonRaphson
           Value = FormatComplex(r.Root.Real, r.Root.Imaginary),
           Label = $"root {r.Index}",
           Swatch = MakeBrush(Color.FromRgb(r.R, r.G, r.B)),
+          CanRemove = canRemove,
         });
       }
 
-      rootList.ItemsSource = _rootViews;
+      rootList.Items.Refresh();
+      addButton.IsEnabled = _renderer.Roots.Count < FractalRenderer.MaxRoots;
     }
 
     private void RefreshRootValues()
@@ -383,9 +486,12 @@ namespace FractalViewer.NewtonRaphson
 
       public required string Label { get; init; }
       public required Brush Swatch { get; init; }
+      public required bool CanRemove { get; init; }
 
       public event PropertyChangedEventHandler? PropertyChanged;
     }
+
+    // ---------- shape helpers ----------
 
     private static SolidColorBrush MakeBrush(Color color)
     {

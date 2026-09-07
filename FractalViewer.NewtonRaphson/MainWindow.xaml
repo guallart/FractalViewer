@@ -14,6 +14,42 @@
         SnapsToDevicePixels="True"
         TextOptions.TextFormattingMode="Display">
 
+    <Window.Resources>
+        <Style x:Key="PanelButton" TargetType="Button">
+            <Setter Property="Background" Value="#2A2A31"/>
+            <Setter Property="Foreground" Value="#D8D8DE"/>
+            <Setter Property="BorderBrush" Value="#3A3A43"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="9,3"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="chrome"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="4">
+                            <ContentPresenter Margin="{TemplateBinding Padding}"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="chrome" Property="Background" Value="#35353E"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.35"/>
+                                <Setter Property="Cursor" Value="Arrow"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="Auto"/>
@@ -39,12 +75,18 @@
                 BorderThickness="1,0,0,0">
             <DockPanel Margin="18,18,18,18">
 
-                <TextBlock DockPanel.Dock="Top"
-                           Text="Roots"
-                           Foreground="#F2F2F4"
-                           FontSize="16"
-                           FontWeight="SemiBold"
-                           Margin="0,0,0,16"/>
+                <DockPanel DockPanel.Dock="Top" Margin="0,0,0,16">
+                    <Button x:Name="addButton"
+                            DockPanel.Dock="Right"
+                            Style="{StaticResource PanelButton}"
+                            Content="Add root"
+                            Click="AddRoot_Click"/>
+                    <TextBlock Text="Roots"
+                               Foreground="#F2F2F4"
+                               FontSize="16"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center"/>
+                </DockPanel>
 
                 <StackPanel DockPanel.Dock="Bottom">
                     <TextBlock x:Name="viewText"
@@ -52,7 +94,7 @@
                                FontFamily="Consolas"
                                FontSize="11"
                                TextWrapping="Wrap"/>
-                    <TextBlock Text="Drag a marker to move that root. Drag elsewhere to pan, scroll to zoom. R resets the view, Ctrl+R the roots."
+                    <TextBlock Text="Drag a marker to move a root, double-click the plane to add one there, right-click a marker to remove it. Drag elsewhere to pan, scroll to zoom. R resets the view, Ctrl+R the roots."
                                Foreground="#5E5E66"
                                FontSize="10"
                                TextWrapping="Wrap"
@@ -66,6 +108,7 @@
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
 
                                 <Border Grid.Column="0"
@@ -87,6 +130,17 @@
                                                FontSize="10"
                                                Margin="0,1,0,0"/>
                                 </StackPanel>
+
+                                <Button Grid.Column="2"
+                                        Style="{StaticResource PanelButton}"
+                                        Content="Remove"
+                                        Padding="7,2"
+                                        FontSize="10"
+                                        VerticalAlignment="Top"
+                                        Margin="8,1,0,0"
+                                        IsEnabled="{Binding CanRemove}"
+                                        Tag="{Binding}"
+                                        Click="RemoveRoot_Click"/>
                             </Grid>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>

@@ -13,7 +13,10 @@ public class FractalRenderer : IDisposable
   private int Height { get; }
 
   private readonly Lock _sync = new();
-  private readonly Complex[] _roots;
+  private readonly List<Complex> _roots = [];
+  private readonly List<int> _slots = [];        // palette slot held by each root
+  private readonly byte[] _colours;              // colours ordered by root position, uploaded to the GPU
+  private bool _coloursDirty = true;
   private Poly _poly;
 
   /// <summary>Complex units per pixel. Smaller means deeper zoom.</summary>
@@ -45,14 +48,17 @@ public class FractalRenderer : IDisposable
 
   private static int PaletteSize => Palette.Length / 3;
 
+  /// <summary>Upper bound on roots: whichever runs out first, the palette or the polynomial.</summary>
+  public static int MaxRoots => Math.Min(Poly.MaxDegree, PaletteSize);
+
   private int PixelCount => Width * Height;
 
   public FractalRenderer(int width, int height, float scale, Complex[] roots)
   {
     ArgumentNullException.ThrowIfNull(roots);
 
-    if (roots.Length > PaletteSize)
-      throw new ArgumentException($"Palette holds only {PaletteSize} colours.", nameof(roots));
+    if (roots.Length is 0 || roots.Length > MaxRoots)
+      throw new ArgumentException($"Need 1 to {MaxRoots} roots.", nameof(roots));
 
     Width = width;
     Height = height;
@@ -61,50 +67,85 @@ public class FractalRenderer : IDisposable
     Context = Context.CreateDefault();
     Accelerator = Context.GetPreferredDevice(preferCPU: false).CreateAccelerator(Context);
 
-    _roots = [.. roots];
-    _poly = new Poly(_roots);
-    Roots = BuildRootInfo(_roots);
+    _colours = new byte[PaletteSize * 3];
+    _roots.AddRange(roots);
+    _slots.AddRange(Enumerable.Range(0, roots.Length));
+    Roots = [];
+    Rebuild();
 
     Rgba = new byte[PixelCount * 4];
     RgbaBuffer = Accelerator.Allocate1D<byte>(PixelCount * 4);
-    PaletteBuffer = Accelerator.Allocate1D(Palette);
+    PaletteBuffer = Accelerator.Allocate1D<byte>(_colours.Length);
 
     Kernel = Accelerator.LoadAutoGroupedStreamKernel
       <Index1D, ArrayView<byte>, ArrayView<byte>, Poly, int, int, float, float, float>(ComputeKernel);
   }
 
+  // ---------- roots ----------
+
   /// <summary>Moves a single root and rebuilds the polynomial around it.</summary>
   public void SetRoot(int index, Complex value)
   {
-    ArgumentOutOfRangeException.ThrowIfNegative(index);
-    ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(index, _roots.Length);
-
     lock (_sync)
     {
+      ArgumentOutOfRangeException.ThrowIfNegative(index);
+      ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(index, _roots.Count);
+
       _roots[index] = value;
-      _poly = new Poly(_roots);
-      Roots = BuildRootInfo(_roots);
+      Rebuild();
     }
   }
 
-  /// <summary>Replaces the whole root set. Degree may change; colours follow the palette order.</summary>
+  /// <summary>Appends a root, taking the lowest unused palette colour. Returns its index.</summary>
+  public int AddRoot(Complex value)
+  {
+    lock (_sync)
+    {
+      if (_roots.Count >= MaxRoots)
+        throw new InvalidOperationException($"Already at {MaxRoots} roots.");
+
+      _roots.Add(value);
+      _slots.Add(FreeSlot());
+      Rebuild();
+
+      return _roots.Count - 1;
+    }
+  }
+
+  /// <summary>Drops a root, releasing its colour. The last root cannot be removed.</summary>
+  public void RemoveRoot(int index)
+  {
+    lock (_sync)
+    {
+      ArgumentOutOfRangeException.ThrowIfNegative(index);
+      ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(index, _roots.Count);
+
+      if (_roots.Count == 1)
+        throw new InvalidOperationException("A polynomial needs at least one root.");
+
+      _roots.RemoveAt(index);
+      _slots.RemoveAt(index);
+      Rebuild();
+    }
+  }
+
+  /// <summary>Replaces the whole root set, resetting colours to palette order.</summary>
   public void SetRoots(Complex[] roots)
   {
     ArgumentNullException.ThrowIfNull(roots);
 
-    if (roots.Length is 0 or > 8 || roots.Length > PaletteSize)
-      throw new ArgumentException($"Need 1 to {Math.Min(8, PaletteSize)} roots.", nameof(roots));
+    if (roots.Length is 0 || roots.Length > MaxRoots)
+      throw new ArgumentException($"Need 1 to {MaxRoots} roots.", nameof(roots));
 
     lock (_sync)
     {
-      Poly poly = new(roots);          // validates before anything is committed
-      Complex[] copy = [.. roots];
+      _roots.Clear();
+      _roots.AddRange(roots);
 
-      _poly = poly;
-      Roots = BuildRootInfo(copy);
+      _slots.Clear();
+      _slots.AddRange(Enumerable.Range(0, roots.Length));
 
-      if (copy.Length == _roots.Length)
-        copy.CopyTo(_roots, 0);
+      Rebuild();
     }
   }
 
@@ -118,23 +159,65 @@ public class FractalRenderer : IDisposable
     }
   }
 
-  private static RootInfo[] BuildRootInfo(Complex[] roots) =>
-    [.. roots.Select((r, i) => new RootInfo(i, r, Palette[i * 3], Palette[i * 3 + 1], Palette[i * 3 + 2]))];
+  private int FreeSlot()
+  {
+    for (int slot = 0; slot < PaletteSize; slot++)
+      if (!_slots.Contains(slot))
+        return slot;
+
+    return 0;
+  }
+
+  // Call under _sync. Roots keep their colour across add and remove, so the GPU needs
+  // the colours ordered by root position rather than the raw palette.
+  private void Rebuild()
+  {
+    Complex[] roots = [.. _roots];
+    _poly = new Poly(roots);
+
+    RootInfo[] info = new RootInfo[roots.Length];
+
+    for (int i = 0; i < roots.Length; i++)
+    {
+      int p = _slots[i] * 3;
+      info[i] = new RootInfo(i, roots[i], Palette[p], Palette[p + 1], Palette[p + 2]);
+
+      _colours[i * 3 + 0] = Palette[p + 0];
+      _colours[i * 3 + 1] = Palette[p + 1];
+      _colours[i * 3 + 2] = Palette[p + 2];
+    }
+
+    Roots = info;
+    _coloursDirty = true;
+  }
+
+  // ---------- rendering ----------
 
   public byte[] Render()
   {
     Poly poly;
     float scale, centreRe, centreIm;
+    byte[]? colours = null;
 
-    // Snapshot under the lock: the UI thread can move a root mid-render, and Poly is
-    // a large struct that would otherwise be copied while it is being rewritten.
+    // Snapshot under the lock: the UI thread can edit roots mid-render, and Poly is a
+    // large struct that would otherwise be copied while it is being rewritten.
     lock (_sync)
     {
       poly = _poly;
       scale = Scale;
       centreRe = CentreRe;
       centreIm = CentreIm;
+
+      if (_coloursDirty)
+      {
+        colours = [.. _colours];
+        _coloursDirty = false;
+      }
     }
+
+    // Every GPU call stays on this thread.
+    if (colours is not null)
+      PaletteBuffer.CopyFromCPU(colours);
 
     Kernel(PixelCount, RgbaBuffer.View, PaletteBuffer.View, poly, Width, Height, scale, centreRe, centreIm);
     RgbaBuffer.CopyToCPU(Rgba);
