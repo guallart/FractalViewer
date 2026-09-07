@@ -1,8 +1,11 @@
 ﻿using FractalViewer.Core;
-using FractalViewer.NewtonRaphson;
 
 using ILGPU;
 using ILGPU.Runtime;
+
+namespace FractalViewer.NewtonRaphson;
+
+public readonly record struct RootInfo(int Index, Complex Root, byte R, byte G, byte B);
 
 public class FractalRenderer : IDisposable
 {
@@ -10,6 +13,8 @@ public class FractalRenderer : IDisposable
   private int Height { get; }
   private float Scale { get; }
   private Poly Poly { get; set; }
+
+  public IReadOnlyList<RootInfo> Roots { get; }
 
   private Accelerator Accelerator { get; }
   private Context Context { get; }
@@ -29,10 +34,17 @@ public class FractalRenderer : IDisposable
     127, 127, 127,
   ];
 
+  private static int PaletteSize => Palette.Length / 3;
+
   private int PixelCount => Width * Height;
 
-  public FractalRenderer(int width, int height, float scale)
+  public FractalRenderer(int width, int height, float scale, Complex[] roots)
   {
+    ArgumentNullException.ThrowIfNull(roots);
+
+    if (roots.Length > PaletteSize)
+      throw new ArgumentException($"Palette holds only {PaletteSize} colours.", nameof(roots));
+
     Width = width;
     Height = height;
     Scale = scale;
@@ -40,7 +52,9 @@ public class FractalRenderer : IDisposable
     Context = Context.CreateDefault();
     Accelerator = Context.GetPreferredDevice(preferCPU: false).CreateAccelerator(Context);
 
-    Poly = new Poly([Complex.One, Complex.OneI, -Complex.OneI]);
+    Poly = new Poly(roots);
+
+    Roots = [.. roots.Select((r, i) => new RootInfo(i, r, Palette[i * 3], Palette[i * 3 + 1], Palette[i * 3 + 2]))];
 
     Rgba = new byte[PixelCount * 4];
     RgbaBuffer = Accelerator.Allocate1D<byte>(PixelCount * 4);
@@ -63,7 +77,7 @@ public class FractalRenderer : IDisposable
     int yi = i / width;
 
     float x = (xi - width * 0.5f) * scale;
-    float y = (height * 0.5f - yi) * scale;
+    float y = (yi - height * 0.5f) * scale;
 
     int root = poly.FindRoot(new Complex(x, y));
 

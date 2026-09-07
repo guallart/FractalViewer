@@ -6,14 +6,73 @@
         xmlns:local="clr-namespace:FractalViewer.NewtonRaphson"
         mc:Ignorable="d"
         Title="Newton Fractal"
-        Width="800"
-        Height="600"
+        SizeToContent="WidthAndHeight"
         ResizeMode="NoResize"
-        SizeToContent="Manual"
-        WindowStartupLocation="CenterScreen">
+        WindowStartupLocation="CenterScreen"
+        Background="#151517"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Display">
+
     <Grid>
-        <Image x:Name="fractal" Stretch="None" SnapsToDevicePixels="True"/>
-        <Canvas x:Name="overlay" Width="800" Height="600"
-            IsHitTestVisible="False" UseLayoutRounding="True"/>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="264"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- Fractal surface: fixed at the bitmap's native pixel size -->
+        <Grid Grid.Column="0" Width="1000" Height="750">
+            <Image x:Name="fractal" Stretch="None"/>
+            <Canvas x:Name="overlay" Width="1000" Height="750" IsHitTestVisible="False"/>
+        </Grid>
+
+        <!-- Roots panel -->
+        <Border Grid.Column="1"
+                Background="#1D1D20"
+                BorderBrush="#2E2E33"
+                BorderThickness="1,0,0,0">
+            <DockPanel Margin="18,18,18,18">
+
+                <TextBlock DockPanel.Dock="Top"
+                           Text="Roots"
+                           Foreground="#F2F2F4"
+                           FontSize="16"
+                           FontWeight="SemiBold"/>
+
+                <ItemsControl x:Name="rootList" VerticalAlignment="Top">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="0,0,0,12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <Border Grid.Column="0"
+                                        Width="20" Height="20"
+                                        CornerRadius="3"
+                                        Background="{Binding Swatch}"
+                                        BorderBrush="#40FFFFFF"
+                                        BorderThickness="1"
+                                        VerticalAlignment="Top"
+                                        Margin="0,2,12,0"/>
+
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="{Binding Value}"
+                                               Foreground="#EDEDF0"
+                                               FontFamily="Consolas"
+                                               FontSize="14"/>
+                                    <TextBlock Text="{Binding Label}"
+                                               Foreground="#7B7B83"
+                                               FontSize="10"
+                                               Margin="0,1,0,0"/>
+                                </StackPanel>
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+            </DockPanel>
+        </Border>
     </Grid>
 </Window>
