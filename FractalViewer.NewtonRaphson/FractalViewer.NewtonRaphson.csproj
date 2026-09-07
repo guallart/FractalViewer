@@ -9,6 +9,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="ILGPU" Version="1.5.3" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\FractalViewer.Core\FractalViewer.Core.csproj" />
   </ItemGroup>
 

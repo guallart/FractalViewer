@@ -7,6 +7,7 @@ public struct Complex
 
   public static Complex One { get; } = new Complex(1.0f, 0.0f);
   public static Complex Zero { get; } = new Complex(0.0f, 0.0f);
+  public static Complex OneI { get; } = new Complex(0.0f, 1.0f);
 
   public Complex(float r, float i)
   {
@@ -57,4 +58,3 @@ public struct Complex
   public static Complex operator *(Complex a, float x) => new Complex(a.Real * x, a.Imaginary * x);
 
 }
-
