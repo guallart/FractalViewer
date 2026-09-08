@@ -77,7 +77,7 @@ namespace FractalViewer.NewtonRaphson
       Closed += (_, _) => _renderer.Dispose();
     }
 
-    // ---------- render scheduling ----------
+    #region render_scheduling
 
     // Dragging fires far faster than a full frame takes. Only one render runs at a
     // time; anything requested meanwhile collapses into a single follow-up pass.
@@ -113,7 +113,9 @@ namespace FractalViewer.NewtonRaphson
       _ = RequestRenderAsync();
     }
 
-    // ---------- iteration counter ----------
+    #endregion
+
+    #region iteration_counter
 
     // Small steps where the picture changes fastest, coarser ones further up, so the
     // whole range stays a few clicks away.
@@ -148,7 +150,9 @@ namespace FractalViewer.NewtonRaphson
     private void IterationsDown_Click(object sender, RoutedEventArgs e) =>
       SetIterations(_renderer.MaxIterations - StepFor(_renderer.MaxIterations - 1));
 
-    // ---------- view transform ----------
+    #endregion
+
+    #region view_transform
 
     private double Scale => _renderer.Scale;
 
@@ -164,7 +168,9 @@ namespace FractalViewer.NewtonRaphson
       Invalidate();
     }
 
-    // ---------- input ----------
+    #endregion
+
+    #region input
 
     private void OnMouseWheel(object sender, MouseWheelEventArgs e)
     {
@@ -279,7 +285,9 @@ namespace FractalViewer.NewtonRaphson
       }
     }
 
-    // ---------- editing roots ----------
+    #endregion
+
+    #region editing_roots
 
     private Complex PointToComplex(Point p) => new((float)XToRe(p.X), (float)YToIm(p.Y));
 
@@ -345,7 +353,9 @@ namespace FractalViewer.NewtonRaphson
         Math.Sqrt(Math.Pow(root.Real - re, 2) + Math.Pow(root.Imaginary - im, 2));
     }
 
-    // ---------- hit testing ----------
+    #endregion
+
+    #region hit_testing
 
     private int HitTestRoot(Point p)
     {
@@ -381,7 +391,9 @@ namespace FractalViewer.NewtonRaphson
       RedrawOverlay();
     }
 
-    // ---------- overlay ----------
+    #endregion
+
+    #region overlay
 
     private void RedrawOverlay()
     {
@@ -468,7 +480,9 @@ namespace FractalViewer.NewtonRaphson
       }
     }
 
-    // ---------- roots panel ----------
+    #endregion
+
+    #region roots_panel
 
     private void BuildRootList()
     {
@@ -535,7 +549,9 @@ namespace FractalViewer.NewtonRaphson
       public event PropertyChangedEventHandler? PropertyChanged;
     }
 
-    // ---------- shape helpers ----------
+    #endregion
+
+    #region shape helpers
 
     private static SolidColorBrush MakeBrush(Color color)
     {
@@ -577,5 +593,7 @@ namespace FractalViewer.NewtonRaphson
       Canvas.SetTop(tb, y);
       overlay.Children.Add(tb);
     }
+
+    #endregion
   }
 }

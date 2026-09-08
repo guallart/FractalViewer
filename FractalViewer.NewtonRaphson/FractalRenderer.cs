@@ -30,8 +30,8 @@ public class FractalRenderer : IDisposable
 
   private readonly Lock _sync = new();
   private readonly List<Complex> _roots = [];
-  private readonly List<int> _slots = [];        // palette slot held by each root
-  private readonly byte[] _colours;              // colours ordered by root position, uploaded to the GPU
+  private readonly List<int> _slots = []; // palette slot held by each root
+  private readonly byte[] _colours; // colours ordered by root position, uploaded to the GPU
   private bool _coloursDirty = true;
   private Poly _poly;
 
@@ -100,7 +100,7 @@ public class FractalRenderer : IDisposable
       <Index1D, ArrayView<byte>, ArrayView<byte>, Poly, ViewParams>(ComputeKernel);
   }
 
-  // ---------- roots ----------
+  #region roots
 
   /// <summary>Moves a single root and rebuilds the polynomial around it.</summary>
   public void SetRoot(int index, Complex value)
@@ -168,7 +168,9 @@ public class FractalRenderer : IDisposable
     }
   }
 
-  // ---------- view ----------
+  #endregion
+
+  #region view
 
   public void SetView(float centreRe, float centreIm, float scale)
   {
@@ -219,7 +221,9 @@ public class FractalRenderer : IDisposable
     _coloursDirty = true;
   }
 
-  // ---------- rendering ----------
+  #endregion
+
+  #region rendering
 
   public byte[] Render()
   {
@@ -293,4 +297,6 @@ public class FractalRenderer : IDisposable
     Context.Dispose();
     GC.SuppressFinalize(this);
   }
+
+  #endregion
 }
