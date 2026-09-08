@@ -3,7 +3,7 @@
 <!-- Drop a screenshot at docs/screenshot.png -->
 ![Screenshot](Docs/screenshot.png)
 
-A small WPF app that draws Newton fractals on the GPU. You move the roots around with the mouse and the picture updates as you drag.
+A small WPF app that draws Newton fractals on the GPU. You move the roots around with the mouse and the picture updates as you drag. Inspired by ![this the 3Blue1brown video](https://www.youtube.com/watch?v=-RdOwhmqP5s).
 
 ## What a Newton fractal is
 
