@@ -1,0 +1,157 @@
+﻿<Window x:Class="FractalViewer.Mandelbrot.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:FractalViewer.Mandelbrot"
+        mc:Ignorable="d"
+        Title="Mandelbrot"
+        SizeToContent="WidthAndHeight"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen"
+        Background="#151517"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Display">
+
+    <Window.Resources>
+        <Style x:Key="PanelButton" TargetType="Button">
+            <Setter Property="Background" Value="#2A2A31"/>
+            <Setter Property="Foreground" Value="#D8D8DE"/>
+            <Setter Property="BorderBrush" Value="#3A3A43"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="9,3"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="chrome"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="4">
+                            <ContentPresenter Margin="{TemplateBinding Padding}"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="chrome" Property="Background" Value="#35353E"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.35"/>
+                                <Setter Property="Cursor" Value="Arrow"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="StepperButton" TargetType="Button" BasedOn="{StaticResource PanelButton}">
+            <Setter Property="Width" Value="26"/>
+            <Setter Property="Height" Value="24"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="FontSize" Value="14"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="240"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- Fractal surface: fixed at the bitmap's native pixel size.
+             Background is required so the grid receives mouse input. -->
+        <Grid x:Name="surface"
+              Grid.Column="0"
+              Width="1000" Height="750"
+              Background="Transparent"
+              ClipToBounds="True"
+              Focusable="True">
+            <Image x:Name="fractal" Stretch="None"/>
+            <Canvas x:Name="overlay" Width="1000" Height="750" IsHitTestVisible="False"/>
+        </Grid>
+
+        <!-- Control panel -->
+        <Border Grid.Column="1"
+                Background="#1D1D20"
+                BorderBrush="#2E2E33"
+                BorderThickness="1,0,0,0">
+            <DockPanel Margin="18,18,18,18">
+
+                <DockPanel DockPanel.Dock="Top" Margin="0,0,0,16">
+                    <Button x:Name="resetButton"
+                            DockPanel.Dock="Right"
+                            Style="{StaticResource PanelButton}"
+                            Content="Reset view"
+                            Click="ResetView_Click"/>
+                    <TextBlock Text="Mandelbrot"
+                               Foreground="#F2F2F4"
+                               FontSize="16"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center"/>
+                </DockPanel>
+
+                <StackPanel DockPanel.Dock="Bottom">
+                    <TextBlock x:Name="viewText"
+                               Foreground="#8B8B93"
+                               FontFamily="Consolas"
+                               FontSize="11"
+                               TextWrapping="Wrap"/>
+
+                    <TextBlock Text="Scroll to zoom, drag to pan. Double-click zooms in on a point, right-click zooms back out. Brackets step the iteration count, comma and full stop cycle the colours, G hides the grid, R resets the view."
+                               Foreground="#5E5E66"
+                               FontSize="10"
+                               TextWrapping="Wrap"
+                               Margin="0,10,0,0"/>
+                </StackPanel>
+
+                <StackPanel VerticalAlignment="Top">
+                    <Border Background="#232329"
+                            BorderBrush="#2E2E36"
+                            BorderThickness="1"
+                            CornerRadius="5"
+                            Padding="12,10">
+                        <StackPanel>
+                            <DockPanel>
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                    <Button x:Name="iterationsDown"
+                                            Style="{StaticResource StepperButton}"
+                                            Content="−"
+                                            Click="IterationsDown_Click"/>
+                                    <TextBlock x:Name="iterationsText"
+                                               Width="52"
+                                               TextAlignment="Center"
+                                               VerticalAlignment="Center"
+                                               Foreground="#EDEDF0"
+                                               FontFamily="Consolas"
+                                               FontSize="14"/>
+                                    <Button x:Name="iterationsUp"
+                                            Style="{StaticResource StepperButton}"
+                                            Content="+"
+                                            Click="IterationsUp_Click"/>
+                                </StackPanel>
+                                <TextBlock Text="Iterations"
+                                           Foreground="#A8A8B0"
+                                           FontSize="12"
+                                           VerticalAlignment="Center"/>
+                            </DockPanel>
+
+                            <CheckBox x:Name="autoIterations"
+                                      Content="Raise with zoom depth"
+                                      Foreground="#8B8B93"
+                                      FontSize="11"
+                                      Margin="0,10,0,0"
+                                      Checked="AutoIterations_Changed"
+                                      Unchecked="AutoIterations_Changed"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+            </DockPanel>
+        </Border>
+    </Grid>
+</Window>
